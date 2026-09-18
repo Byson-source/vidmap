@@ -100,7 +100,11 @@ image identities, then continues ordinary RA → GP → BA. This stage only save
 ZfLOC outputs; it does not fuse priors into the solvers. The default is disabled.
 
 The current ZfLOC entry supports the 40-second LaMAR crop sampled at 1 Hz
-(two independent 20-view windows). Use the same 40 sampled images for VidMap.
+(two independent 20-view windows). Feed every raw image in the crop to VidMap;
+ZfLOC samples only its own input at 1 Hz. Both paths use filenames relative to
+the same start timestamp. Sampled images must be a byte-identical subset of the
+VidMap input. A sampled image not selected as a VidMap keyframe retains a null
+image ID; shadow mode does not snap it to a different keyframe.
 For example, reuse the baseline's finalized mapper inputs:
 
 ```bash

@@ -96,6 +96,23 @@ class FloorplanShadowTest(unittest.TestCase):
         self.assertTrue(report['images'][-1]['excluded_by_frontend'])
         self.assertEqual(report['images'][-1]['window'], 1)
 
+    def test_full_rate_vidmap_and_one_hz_zfloc(self):
+        for i in range(40):
+            name = f'{i + 0.5:011.6f}.jpg'
+            (self.images / name).write_bytes(name.encode())
+            self.ids[100 + i] = name
+        self.assertEqual(self.solve(self.options, self.complete_pipeline), 1)
+        self.assertEqual(self.events, ['matching', 'consensus', 'ra', 'gp', 'ba'])
+        report = json.loads((self.out / 'floorplan/vidmap_images.json').read_text())
+        self.assertEqual(len(report['images']), 40)
+        self.assertEqual(len(list(self.images.iterdir())), 80)
+
+    def test_missing_sample_stops_before_ra(self):
+        (self.images / self.names[-1]).unlink()
+        with self.assertRaisesRegex(ValueError, 'missing from VidMap'):
+            self.solve(self.options, self.complete_pipeline)
+        self.assertNotIn('ra', self.events)
+
     def test_disabled_does_not_run_zfloc(self):
         self.assertEqual(self.solve(FloorplanShadowOptions(), AssertionError('must not launch')), 0)
         self.assertEqual(self.events, ['ra', 'gp', 'ba'])

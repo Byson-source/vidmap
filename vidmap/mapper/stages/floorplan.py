@@ -85,8 +85,8 @@ def run_floorplan_shadow(
     if any(Path(name).name != name for name in names):
         raise ValueError("Invalid ZfLOC sampled image name")
     inputs = {p.name for p in image_dir.iterdir() if p.suffix.lower() in {".jpg", ".jpeg", ".png"}}
-    if inputs != set(names) or not set(image_names.values()).issubset(inputs):
-        raise ValueError("ZfLOC frames do not match VidMap input images")
+    if not set(names).issubset(inputs) or not set(image_names.values()).issubset(inputs):
+        raise ValueError("ZfLOC frames or mapper keyframes are missing from VidMap input images")
     windows = json.loads((out / "reconstruction/windows.json").read_text())["windows"]
     if len(windows) != 2 or any(len(window) != 20 for window in windows) or sum(windows, []) != names:
         raise ValueError("ZfLOC window membership does not match the 40-frame input")
