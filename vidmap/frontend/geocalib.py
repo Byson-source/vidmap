@@ -215,7 +215,17 @@ def calibrate_shared_intrinsics(model, image_paths: Sequence[Path], *, device: s
         images.append(image.to(device))
 
     batch = torch.stack(images).to(device)
-    result = model.calibrate(batch, shared_intrinsics=True)
+    try:
+        result = model.calibrate(batch, shared_intrinsics=True)
+    except torch.OutOfMemoryError:
+        if device != "cuda":
+            raise
+        # Retain the full shared-intrinsics batch on memory-limited GPUs.
+        del batch, images
+        model.cpu()
+        torch.cuda.empty_cache()
+        logger.warning("GeoCalib shared batch exceeded CUDA memory; retrying the same images on CPU")
+        return calibrate_shared_intrinsics(model, image_paths, device="cpu")
     if not isinstance(result, Mapping):
         raise RuntimeError(f"GeoCalib shared calibration returned {type(result).__name__}, expected a mapping")
     height, width = expected_shape[1:]

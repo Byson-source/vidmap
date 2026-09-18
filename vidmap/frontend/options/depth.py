@@ -14,6 +14,8 @@ class Da3VideoOptions:
     """Typed config for the Depth Anything 3 video backend."""
 
     type: Literal["da3_video"] = "da3_video"
+    device: Literal["cuda", "cpu"] = "cuda"
+    engine: str | None = None
     window_size: int = 1
     ref_view_strategy: Literal["middle", "first", "saddle_balanced"] = "middle"
     process_res: int = 504

@@ -67,14 +67,31 @@ class Da3Video(torch.nn.Module):
         super().__init__()
         assert isinstance(conf, Da3VideoOptions), f"Expected Da3VideoOptions, got {type(conf).__name__}"
         self.conf = conf
-        with optional_xformers_disabled():
-            import_model_package("depth_anything_3", DA3_PACKAGE_ROOT)
-            _configure_da3_logging()
-            _verify_da3_model_snapshot(DA3_MODEL_ID, DA3_MODEL_REVISION)
-            self.model = Da3Inference.from_pretrained(DA3_MODEL_ID, revision=DA3_MODEL_REVISION)
-        self.model = self.model.cuda().eval()
+        import_model_package("depth_anything_3", DA3_PACKAGE_ROOT)
+        _configure_da3_logging()
+        if conf.engine is not None:
+            if conf.device != "cuda" or conf.process_res != 504 or conf.ref_view_strategy != "middle":
+                raise ValueError("DA3 TensorRT requires device=cuda, process_res=504, ref_view_strategy=middle")
+            from vidmap.frontend.models.depth.da3_trt import Da3TensorRT
+
+            self.model = Da3TensorRT(conf.engine)
+            if self.model.max_views != conf.window_size:
+                raise ValueError(
+                    f"DA3 TensorRT profile supports {self.model.max_views} views, configured {conf.window_size}"
+                )
+        else:
+            with optional_xformers_disabled():
+                _verify_da3_model_snapshot(DA3_MODEL_ID, DA3_MODEL_REVISION)
+                self.model = Da3Inference.from_pretrained(DA3_MODEL_ID, revision=DA3_MODEL_REVISION)
+            self.model = self.model.to(conf.device).eval()
         for parameter in self.parameters():
             parameter.requires_grad = False
+
+    def cpu(self):
+        if hasattr(self.model, "close"):
+            self.model.close()
+            return self
+        return super().cpu()
 
     def forward(self, images: torch.Tensor):
         """Infer one prepared image."""

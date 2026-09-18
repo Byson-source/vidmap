@@ -19,6 +19,7 @@ from vidmap.frontend.cache import (
     artifact_fingerprint,
     cache_metadata,
     certify_incremental_artifact,
+    file_fingerprint,
     inspect_incremental_items,
     mark_incremental_cache_complete,
     prepare_incremental_cache,
@@ -64,12 +65,15 @@ def _release_depth_model(model) -> None:
 
 def da3_cache_identity(backend: Da3VideoOptions) -> dict:
     """Return the DA3 implementation identity that can affect depth payloads."""
-    return {
+    identity = {
         "config": semantic_config(backend),
         "source_revision": DA3_SOURCE_REVISION,
         "config_sha256": DA3_MODEL_CONFIG_SHA256,
         "checkpoint_sha256": DA3_MODEL_CHECKPOINT_SHA256,
     }
+    if backend.engine is not None:
+        identity["engine_sha256"] = file_fingerprint(Path(backend.engine).expanduser())
+    return identity
 
 
 def _depth_options_cache_config(options):

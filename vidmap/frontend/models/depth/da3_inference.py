@@ -29,7 +29,7 @@ class Da3Inference(torch.nn.Module, PyTorchModelHubMixin):
         assert images.ndim == 4 and images.shape[1] == 3
         device = next(self.parameters()).device
         batch = images.to(device, non_blocking=True)[None].float()
-        autocast_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+        autocast_dtype = torch.bfloat16 if device.type == "cpu" or torch.cuda.is_bf16_supported() else torch.float16
         with torch.autocast(device_type=device.type, dtype=autocast_dtype):
             output = self.model(batch, None, None, [], False, False, ref_view_strategy)
 

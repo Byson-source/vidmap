@@ -39,6 +39,7 @@ class FloorplanShadowOptions:
     f3loc: Optional[str] = None
     meta_dir: Optional[str] = None
     python_executable: Optional[str] = None
+    window_size: Annotated[int, Field(ge=10, le=20, multiple_of=10)] = 20
     start_us: Annotated[int, Field(ge=0)] = 3302315254
     trans_thresh: Annotated[float, Field(gt=0, allow_inf_nan=False)] = 3.0
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import logging
 import re
 import struct
@@ -327,6 +328,19 @@ class GlobalPositioner:
         self.solve_state.export_poses()
         self.solve_state.export_track_values()
 
+    def save_pass_result(self, stage, result):
+        """Capture the unmodified pass result for offline trajectory evaluation."""
+        if not self.persist_intermediate_reconstructions:
+            return
+        directory = self.output_dir / f"rec-{stage}"
+        directory.mkdir(parents=True, exist_ok=True)
+        self.reconstruction.write(directory)
+        replay_result = self.result_for_replay(result)
+        (directory / "solver.json").write_text(json.dumps({
+            "success": replay_result["success"],
+            **replay_result["debug_diagnostics"],
+        }, indent=2) + "\n")
+
     def first_pass(self, native_options, replay_images):
         input_summary = None
         if self.replay.write_enabled("gp1"):
@@ -354,6 +368,7 @@ class GlobalPositioner:
                 "output_summary.json",
                 gp_output_summary("gp1", self.solve_state, replay_result),
             )
+        self.save_pass_result("gp1", result)
         self.require_success(result, "First")
         return result
 
@@ -404,6 +419,7 @@ class GlobalPositioner:
                 "output_summary.json",
                 gp_output_summary("gp2", self.solve_state, replay_result),
             )
+        self.save_pass_result("gp2", result)
         self.require_success(result, "Second")
         return result
 

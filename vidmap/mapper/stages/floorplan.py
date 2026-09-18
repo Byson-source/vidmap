@@ -54,7 +54,7 @@ def run_floorplan_shadow(
     for name in ("raw_images", "engine", "f3loc", "meta_dir"):
         command += ["--" + name.replace("_", "-"), str(Path(getattr(options, name)).expanduser())]
     command += ["--out", str(out), "--start-us", str(options.start_us),
-                "--trans-thresh", str(options.trans_thresh)]
+                "--trans-thresh", str(options.trans_thresh), "--window-size", str(options.window_size)]
     # The SfM and TRT environments may use different Python ABIs. Do not pass
     # the parent's native-extension search path into the TRT interpreter.
     env = os.environ.copy()
@@ -88,14 +88,14 @@ def run_floorplan_shadow(
     if not set(names).issubset(inputs) or not set(image_names.values()).issubset(inputs):
         raise ValueError("ZfLOC frames or mapper keyframes are missing from VidMap input images")
     windows = json.loads((out / "reconstruction/windows.json").read_text())["windows"]
-    if len(windows) != 2 or any(len(window) != 20 for window in windows) or sum(windows, []) != names:
+    if len(windows) != 40 // options.window_size or any(len(window) != options.window_size for window in windows) or sum(windows, []) != names:
         raise ValueError("ZfLOC window membership does not match the 40-frame input")
     matching = json.loads((out / "matching_summary.json").read_text())["records"]
     expected = {name: stamp * 1000 for name, stamp in zip(names, stamps)}
     if len(matching) != 40 or {row["frame"]: row["timestamp_ns"] for row in matching} != expected:
         raise ValueError("ZfLOC matching timestamps do not match sampled raw timestamps")
     summary = json.loads((out / "consensus/summary.json").read_text())
-    if (summary["scope"] != "independent_20_view_windows" or summary["cross_window_alignment"]
+    if (summary["scope"] != f"independent_{options.window_size}_view_windows" or summary["cross_window_alignment"]
             or summary["prior_columns"] != ["x_m", "y_m", "yaw_deg"]):
         raise ValueError("Unexpected ZfLOC consensus coordinate contract")
     for kind in ("local", "global"):

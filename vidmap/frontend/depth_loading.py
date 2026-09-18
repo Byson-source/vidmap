@@ -93,7 +93,7 @@ class WindowDataset(Dataset):
         index = self.image_to_index[name]
         half_window = self.window_size // 2
         start = max(0, index - half_window)
-        end = min(len(self.image_dataset), index + half_window + 1)
+        end = min(len(self.image_dataset), index + self.window_size - half_window)
         if end - start < self.window_size:
             if start == 0:
                 end = min(len(self.image_dataset), self.window_size)

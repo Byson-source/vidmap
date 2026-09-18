@@ -49,12 +49,12 @@ class FloorplanShadowTest(unittest.TestCase):
         }))
         for name in self.names:
             (out / 'prep/frames_ts' / name).write_bytes(name.encode())
-        (out / 'reconstruction/windows.json').write_text(json.dumps({'windows': [self.names[:20], self.names[20:]]}))
+        (out / 'reconstruction/windows.json').write_text(json.dumps({'windows': [self.names[i:i+self.options.window_size] for i in range(0,40,self.options.window_size)]}))
         (out / 'matching_summary.json').write_text(json.dumps({'records': [
             {'frame': name, 'timestamp_ns': stamp * 1000} for name, stamp in zip(self.names, stamps)
         ]}))
         (out / 'consensus/summary.json').write_text(json.dumps({
-            'scope': 'independent_20_view_windows', 'cross_window_alignment': False,
+            'scope': f'independent_{self.options.window_size}_view_windows', 'cross_window_alignment': False,
             'prior_columns': ['x_m', 'y_m', 'yaw_deg'],
         }))
         for kind in ('local', 'global'):
@@ -95,6 +95,13 @@ class FloorplanShadowTest(unittest.TestCase):
         self.assertIsNone(report['images'][-1]['image_id'])
         self.assertTrue(report['images'][-1]['excluded_by_frontend'])
         self.assertEqual(report['images'][-1]['window'], 1)
+
+    def test_ten_view_windows(self):
+        self.options = replace(self.options, window_size=10)
+        self.assertEqual(self.solve(self.options, self.complete_pipeline), 1)
+        report = json.loads((self.out / 'floorplan/vidmap_images.json').read_text())
+        self.assertEqual([r['window'] for r in report['images']], [i//10 for i in range(40)])
+        self.assertEqual(self.events, ['matching', 'consensus', 'ra', 'gp', 'ba'])
 
     def test_full_rate_vidmap_and_one_hz_zfloc(self):
         for i in range(40):
