@@ -1,5 +1,6 @@
 """Mapper entry point and complete mapping-stage sequence."""
 
+import logging
 from collections.abc import Callable
 from pathlib import Path
 
@@ -20,6 +21,9 @@ from .stages.rotation_averaging import RotationAverager
 from .stages.tracks import TrackBuilder
 from .stages.vgc_filter import ViewGraphFilter
 from .stages.view_graph_calibration import ViewGraphCalibrator
+
+
+logger = logging.getLogger(__name__)
 
 
 class Mapper:
@@ -150,6 +154,18 @@ class Mapper:
         )
         relative_pose = relative_pose_estimator.estimate()
 
+        if self.conf.floorplan_shadow.enabled:
+            from vidmap.reconstruction import local_input_image_dir
+
+            from .stages.floorplan import run_floorplan_shadow
+
+            run_floorplan_shadow(
+                self.conf.floorplan_shadow,
+                image_names={int(i): str(image.name) for i, image in solve_state.reconstruction.images.items()},
+                image_dir=local_input_image_dir(self.mapper_inputs),
+                output_dir=self.sfm_outputs_dir,
+            )
+
         rotation_averager = RotationAverager(
             solve_state=solve_state,
             options=self.conf.ra,
@@ -157,6 +173,7 @@ class Mapper:
             filtered_consecutive_pair_ids=relative_pose.filtered_consecutive_pairs,
             replay=replay,
         )
+        logger.info("RA_START")
         rotation_averager.average()
 
         # Mark inconsistent boundary depth before track construction so every

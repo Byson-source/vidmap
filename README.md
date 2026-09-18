@@ -91,6 +91,50 @@ Both mapping commands write the final COLMAP model under `$OUTPUT_DIR/rec`.
 Resolved `frontend_config.yaml` and `mapping_config.yaml` are written directly
 under `$OUTPUT_DIR`.
 
+## ZfLOC matching before rotation averaging
+
+Set `mapper.floorplan_shadow.enabled=true` to run the existing ZfLOC pipeline
+**inside VidMap, after relative-pose estimation and before rotation averaging**.
+VidMap waits for DA3 → BEV → floorplan matching → per-window consensus, verifies
+image identities, then continues ordinary RA → GP → BA. This stage only saves
+ZfLOC outputs; it does not fuse priors into the solvers. The default is disabled.
+
+The current ZfLOC entry supports the 40-second LaMAR crop sampled at 1 Hz
+(two independent 20-view windows). Use the same 40 sampled images for VidMap.
+For example, reuse the baseline's finalized mapper inputs:
+
+```bash
+python -m vidmap.map --mapper-inputs "$BASELINE/mapper_inputs" --output "$OUTPUT_DIR" \
+  mapping.mapper.floorplan_shadow.enabled=true \
+  mapping.mapper.floorplan_shadow.zfloc_root="$ZFLOC_ROOT" \
+  mapping.mapper.floorplan_shadow.raw_images="$RAW_IMAGES" \
+  mapping.mapper.floorplan_shadow.engine="$TRT_ENGINE" \
+  mapping.mapper.floorplan_shadow.f3loc="$F3LOC_ROOT" \
+  mapping.mapper.floorplan_shadow.meta_dir="$FLOORPLAN_META" \
+  mapping.mapper.floorplan_shadow.python_executable="$ZFLOC_PYTHON"
+```
+
+The same overrides work with `python -m vidmap.run`. `zfloc_root` is the directory
+containing `vidmap/main.py`; `raw_images` contains the original timestamp-named
+images; `python_executable` selects the validated ZfLOC/TRT environment (omit it
+to use VidMap's interpreter). The default start is `3302315254` microseconds and
+`trans_thresh` is 3 meters. Both can be set under `mapper.floorplan_shadow`.
+
+Outputs appear under `$OUTPUT_DIR/floorplan/`, including `matching_summary.json`,
+`consensus/local_priors.npy`, `consensus/global_priors.npy`, and their star plots.
+`vidmap_images.json` records exact image IDs, raw timestamps, window membership,
+input hashes and frames excluded by the frontend. Candidate yaw is in radians;
+selected-prior yaw is in degrees. The existing `global_priors` are still selected
+within each window, not across windows using GP. Pipeline errors or mismatched
+images stop execution before RA. Existing floorplan outputs are preserved; use
+a new output directory to repeat a run.
+
+CPU integration tests (neural models and solvers are mocked):
+
+```bash
+python -m unittest discover -s tests -p test_floorplan_shadow.py -v
+```
+
 ## Visualization
 
 ### Browser viewer

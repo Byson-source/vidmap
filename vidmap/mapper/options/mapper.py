@@ -1,7 +1,7 @@
 from dataclasses import field as dc_field
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 
-from pydantic import ConfigDict, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import ArgsKwargs
 
 from vidmap.configuration.validators import dataclass as pydantic_dataclass
@@ -26,6 +26,32 @@ class ReplayCacheOptions:
     mode: Literal["off", "byte_check"] = "off"
     root: Optional[str] = None
     write_stage: Optional[str] = None
+
+
+@pydantic_dataclass(frozen=True, config=ConfigDict(extra="forbid", strict=True))
+class FloorplanShadowOptions:
+    """Run ZfLOC before RA and save results without changing solver inputs."""
+
+    enabled: bool = False
+    zfloc_root: Optional[str] = None
+    raw_images: Optional[str] = None
+    engine: Optional[str] = None
+    f3loc: Optional[str] = None
+    meta_dir: Optional[str] = None
+    python_executable: Optional[str] = None
+    start_us: Annotated[int, Field(ge=0)] = 3302315254
+    trans_thresh: Annotated[float, Field(gt=0, allow_inf_nan=False)] = 3.0
+
+    @model_validator(mode="after")
+    def require_pipeline_inputs(self):
+        if self.enabled:
+            missing = [
+                name for name in ("zfloc_root", "raw_images", "engine", "f3loc", "meta_dir")
+                if not getattr(self, name) or not getattr(self, name).strip()
+            ]
+            if missing:
+                raise ValueError(f"floorplan_shadow requires: {', '.join(missing)}")
+        return self
 
 
 def coerce_to_dict(raw):
@@ -53,6 +79,7 @@ class MapperOptions:
     ra: RAOptions = dc_field(default_factory=RAOptions)
     tracks: MapperTrackOptions = dc_field(default_factory=MapperTrackOptions)
 
+    floorplan_shadow: FloorplanShadowOptions = dc_field(default_factory=FloorplanShadowOptions)
     replay_cache: ReplayCacheOptions = dc_field(default_factory=ReplayCacheOptions)
 
     @model_validator(mode="before")
@@ -70,6 +97,7 @@ class MapperOptions:
             "ra": RAOptions,
             "tracks": MapperTrackOptions,
             "replay_cache": ReplayCacheOptions,
+            "floorplan_shadow": FloorplanShadowOptions,
         }
         raw = instantiate_nested_options(coerce_to_dict(raw), option_groups)
         if not isinstance(raw, dict):
