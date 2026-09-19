@@ -11,9 +11,49 @@ import sys
 import time
 
 from vidmap.mapper.inputs.snapshot import FileProvenance
-from vidmap.mapper.options.mapper import FloorplanShadowOptions
+from vidmap.mapper.options.mapper import FloorplanGP1Options, FloorplanShadowOptions
 
 logger = logging.getLogger(__name__)
+
+
+def run_floorplan_gp1(options: FloorplanGP1Options, *, reconstruction, output_dir: Path) -> Path | None:
+    """Export a copy of GP1 and synchronously reselect cached candidates before GP2."""
+    if not options.enabled:
+        return None
+    import numpy as np
+
+    script = Path(options.zfloc_root).expanduser() / "vidmap/utils/consensus_gp1.py"
+    candidates = Path(options.candidates_dir).expanduser()
+    if not script.is_file() or not candidates.is_dir():
+        raise FileNotFoundError(f"GP1 consensus inputs: {script}, {candidates}")
+    images = sorted(reconstruction.reg_image_ids())
+    if len(images) < 2:
+        raise ValueError("GP1 consensus requires at least two registered cameras")
+    poses = np.tile(np.eye(4), (len(images), 1, 1))
+    names = []
+    for index, image_id in enumerate(images):
+        camera = reconstruction.images[image_id]
+        names.append(camera.name)
+        poses[index, :3] = camera.cam_from_world().inverse().matrix()
+    out = Path(output_dir) / "floorplan_gp1"
+    out.mkdir(parents=True, exist_ok=False)
+    # Tiny pose arrays need no compression; native COLMAP may bring its own zlib.
+    np.savez(out / "trajectory_gp1.npz", names=names, image_ids=images, camera_poses=poses)
+    command = [options.python_executable or sys.executable, str(script),
+               "--trajectory", str(out / "trajectory_gp1.npz"), "--candidates-dir", str(candidates),
+               "--out", str(out), "--trans-thresh", str(options.trans_thresh),
+               "--max-interpolation-gap-s", str(options.max_interpolation_gap_s)]
+    (out / "command.json").write_text(json.dumps(command, indent=2) + "\n")
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    env["PYTHONUNBUFFERED"] = "1"
+    logger.info("ZFLOC_GP1_CONSENSUS_START cameras=%d output=%s", len(images), out)
+    subprocess.run(command, env=env, check=True)
+    report = json.loads((out / "summary.json").read_text())
+    if report["scope"] != "whole_gp1_trajectory" or report["n_gp1_cameras"] != len(images):
+        raise ValueError("GP1 consensus did not cover the exported trajectory")
+    logger.info("ZFLOC_GP1_CONSENSUS_READY selected=%d output=%s", report["global"]["accepted"], out)
+    return out
 
 
 def run_floorplan_shadow(

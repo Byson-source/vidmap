@@ -55,6 +55,24 @@ class FloorplanShadowOptions:
         return self
 
 
+@pydantic_dataclass(frozen=True, config=ConfigDict(extra="forbid", strict=True))
+class FloorplanGP1Options:
+    """Reselect cached fliplr candidates after GP1; export only, no solver costs."""
+
+    enabled: bool = False
+    zfloc_root: Optional[str] = None
+    candidates_dir: Optional[str] = None
+    python_executable: Optional[str] = None
+    trans_thresh: Annotated[float, Field(gt=0, allow_inf_nan=False)] = 3.0
+    max_interpolation_gap_s: Annotated[float, Field(gt=0, allow_inf_nan=False)] = 2.0
+
+    @model_validator(mode="after")
+    def require_inputs(self):
+        if self.enabled and any(not value or not value.strip() for value in (self.zfloc_root, self.candidates_dir)):
+            raise ValueError("floorplan_gp1 requires zfloc_root and candidates_dir")
+        return self
+
+
 def coerce_to_dict(raw):
     """Copy keyword input without accepting positional construction."""
     if isinstance(raw, dict):
@@ -81,6 +99,7 @@ class MapperOptions:
     tracks: MapperTrackOptions = dc_field(default_factory=MapperTrackOptions)
 
     floorplan_shadow: FloorplanShadowOptions = dc_field(default_factory=FloorplanShadowOptions)
+    floorplan_gp1: FloorplanGP1Options = dc_field(default_factory=FloorplanGP1Options)
     replay_cache: ReplayCacheOptions = dc_field(default_factory=ReplayCacheOptions)
 
     @model_validator(mode="before")
@@ -99,6 +118,7 @@ class MapperOptions:
             "tracks": MapperTrackOptions,
             "replay_cache": ReplayCacheOptions,
             "floorplan_shadow": FloorplanShadowOptions,
+            "floorplan_gp1": FloorplanGP1Options,
         }
         raw = instantiate_nested_options(coerce_to_dict(raw), option_groups)
         if not isinstance(raw, dict):

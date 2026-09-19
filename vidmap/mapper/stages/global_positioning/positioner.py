@@ -10,6 +10,7 @@ import struct
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 import pycolmap
@@ -228,6 +229,7 @@ class GlobalPositioner:
     replay: ReplayCache
     persist_intermediate_reconstructions: bool = False
     playback_trace: PlaybackTraceRecorder | None = None
+    after_first_pass: Callable[[], None] | None = None
     first_pass_tolerances: GlobalPositioningTolerances = field(init=False)
 
     @property
@@ -569,6 +571,8 @@ class GlobalPositioner:
         )
         try:
             result = self.first_pass(native_options, replay_images)
+            if self.after_first_pass is not None:
+                self.after_first_pass()
             if (
                 previous_depth_outlier_masks is not None
                 and self.options.track_filter.depth_prior_outlier_stages == "gp1"

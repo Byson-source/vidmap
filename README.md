@@ -139,6 +139,45 @@ CPU integration tests (neural models and solvers are mocked):
 python -m unittest discover -s tests -p test_floorplan_shadow.py -v
 ```
 
+## ZfLOC global consensus after GP1
+
+`mapper.floorplan_gp1` runs synchronously after successful GP1 and before GP2.
+It uses all registered GP1 cameras and the existing 40-frame, 1 Hz **fliplr**
+top-10 candidate sets. Matching and depth inference are not rerun. Enable it
+independently of `floorplan_shadow`:
+
+```bash
+python -m vidmap.map --mapper-inputs "$BASELINE/mapper_inputs" --output "$OUTPUT_DIR" \
+  --mapping-conf uncalib/base \
+  mapping.mapper.floorplan_gp1.enabled=true \
+  mapping.mapper.floorplan_gp1.zfloc_root=/home/ayumi/okvis_ws/src/zfloc \
+  mapping.mapper.floorplan_gp1.candidates_dir="$RUN/zfloc20_fliplr_20260919" \
+  mapping.mapper.floorplan_gp1.python_executable=/home/ayumi/oss/miniconda3/envs/mapanything/bin/python
+```
+
+Use a fresh `$OUTPUT_DIR` and the usual VidMap runtime environment. The same
+overrides work with `vidmap.run`. The default is disabled. Export does not
+require intermediate reconstruction persistence and does not alter GP2 costs
+or solver poses.
+
+Cached GeoCalib camera-up vectors, transformed by interpolated GP1 camera
+orientations, determine the rotation to +Y up. Candidate timestamps use exact
+filename nanoseconds plus the recorded time origin; centers are interpolated
+linearly and orientations with SLERP. Extrapolation is rejected, and gaps over
+`max_interpolation_gap_s=2.0` fail explicitly. Exact `np.fliplr` requires the
+matching plane `(-X,Z)`; gravity-aligned 3D poses remain proper rotations.
+One existing global-consensus call considers all candidates across both windows.
+It selects by XY with `trans_thresh=3.0` meters and retains candidate yaw in
+degrees. Neither gravity nor selection uses GT.
+
+`$OUTPUT_DIR/floorplan_gp1/` contains original and gravity-aligned GP1 trajectory
+NPZ files, interpolated candidate poses, `global_priors.{npy,json,png}`, and
+`summary.json` with timestamp associations, selected ranks, rejected frames,
+gravity residuals and the fitted similarity. Failure stops before GP2.
+
+Checks: `python -m unittest discover -s tests -p 'test_floorplan*.py'` and, in
+the ZfLOC environment, `python vidmap/utils/test_consensus_gp1.py`.
+
 ## Visualization
 
 ### Browser viewer

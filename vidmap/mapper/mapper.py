@@ -199,6 +199,16 @@ class Mapper:
 
         # Solve positions from the fixed rotations and tracks, then refine the
         # complete reconstruction with bundle adjustment.
+        after_first_pass = None
+        if self.conf.floorplan_gp1.enabled:
+            from functools import partial
+
+            from .stages.floorplan import run_floorplan_gp1
+
+            after_first_pass = partial(
+                run_floorplan_gp1, self.conf.floorplan_gp1,
+                reconstruction=solve_state.reconstruction, output_dir=self.sfm_outputs_dir,
+            )
         global_positioner = GlobalPositioner(
             solve_state=solve_state,
             tracks=tracks,
@@ -211,6 +221,7 @@ class Mapper:
             replay=replay,
             persist_intermediate_reconstructions=self.persist_intermediate_reconstructions,
             playback_trace=playback_trace,
+            after_first_pass=after_first_pass,
         )
         global_positioner.position()
 
