@@ -59,6 +59,8 @@ def solve(*,walls=True,bad=False,width=2.,weight=1.):
 def test_native_wall_joint_and_outlier():
     clean=solve();robust=solve(bad=True);quadratic=solve(bad=True,width=1e6)
     assert clean[0].diagnostics.num_floorplan_wall_residuals==12
+    assert set(clean[0].final_residual_costs)=={'bearing','depth','scale','wall'}
+    np.testing.assert_allclose(sum(clean[0].final_residual_costs.values()),clean[0].diagnostics.final_cost,atol=1e-8)
     clean_error=np.linalg.norm(clean[1][:,[0,2]]-clean[3][:,[0,2]])
     robust_error=np.linalg.norm(robust[2][:,[0,2]]-robust[4][:,[0,2]])
     quadratic_error=np.linalg.norm(quadratic[2][:,[0,2]]-quadratic[4][:,[0,2]])

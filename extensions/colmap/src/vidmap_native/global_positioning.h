@@ -144,6 +144,8 @@ struct GlobalPositioningDiagnostics {
 
 struct GlobalPositioningResult {
   bool success = false;
+  std::map<std::string, double> initial_residual_costs;
+  std::map<std::string, double> final_residual_costs;
   std::map<ImageId, double> depth_map_scales;
   std::map<FrameId, Eigen::Vector3d> initial_frame_centers;
   std::map<Point3DId, Eigen::Vector3d> initial_point3D_xyz;

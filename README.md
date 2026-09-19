@@ -216,7 +216,8 @@ Disabled, or both pass weights zero, preserves the original call path.
 
 `floorplan_wall/{gp1,gp2}/` contains `factors.json` (provenance, correspondence,
 weights and transforms), `result.json` (actual native count, initial/final wall
-distances and Huber derivatives), and `trajectory_floorplan.{npz,png}`. These
+distances and Huber derivatives), and `trajectory_floorplan.{npz,png}`. GP solver
+reports additionally split the robust bearing/depth/scale/wall objective costs. These
 camera debug plots compare input/output using the **same solver transform for
 that pass**, with no GT alignment. GP1's input is the visual-only warm-up.
 `rec-gp_warmup` is also saved when intermediate reconstruction persistence is on.

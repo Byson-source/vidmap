@@ -267,6 +267,9 @@ class GlobalPositioner:
             "debug_diagnostics": {
                 **({"num_floorplan_wall_residuals": diagnostics.num_floorplan_wall_residuals}
                    if getattr(diagnostics, "num_floorplan_wall_residuals", 0) else {}),
+                **({"initial_residual_costs": dict(result.initial_residual_costs),
+                    "final_residual_costs": dict(result.final_residual_costs)}
+                   if getattr(diagnostics, "num_floorplan_wall_residuals", 0) else {}),
                 "num_bata_residuals": diagnostics.num_bata_residuals,
                 "num_metric_depth_residuals": diagnostics.num_metric_depth_residuals,
                 "num_scale_prior_residuals": diagnostics.num_scale_prior_residuals,
@@ -574,6 +577,8 @@ class GlobalPositioner:
                 )
             ],
         )
+        if self.options.floorplan.active and not hasattr(native_options, "floorplan_wall_priors"):
+            raise RuntimeError("GP floorplan requires rebuilding the VidMap native extension")
         configure_temporal_acceleration_options(
             native_options,
             self.options,

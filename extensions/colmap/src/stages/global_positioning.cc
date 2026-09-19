@@ -140,6 +140,7 @@ class GlobalPositioner {
       AddCamerasAndPointsToParameterGroups();
     }
     ParameterizeVariables();
+    result_.initial_residual_costs = ResidualCosts();
     const int support_rounds = options_.sequential_support_warmup_rounds;
 
     ceres::Solver::Summary summary;
@@ -161,6 +162,7 @@ class GlobalPositioner {
       ConvertBackResults();
       throw;
     }
+    result_.final_residual_costs = ResidualCosts();
     PopulateResult(summary);
     ConvertBackResults();
     return result_;
@@ -418,6 +420,25 @@ class GlobalPositioner {
     AddDepthMapScalePriors();
   }
 
+  void RecordResidual(const char* kind, ceres::ResidualBlockId residual) {
+    if (!options_.floorplan_wall_priors.empty() && options_.floorplan_loss.weight > 0.0)
+      residual_blocks_[kind].push_back(residual);
+  }
+
+  std::map<std::string, double> ResidualCosts() {
+    std::map<std::string, double> costs;
+    for (const auto& [kind, blocks] : residual_blocks_) {
+      ceres::Problem::EvaluateOptions evaluation;
+      evaluation.residual_blocks = blocks;
+      evaluation.num_threads = solver_options_.num_threads;
+      double cost = 0;
+      if (!problem_->Evaluate(evaluation, &cost, nullptr, nullptr, nullptr))
+        throw std::runtime_error("GP residual cost evaluation failed");
+      costs[kind] = cost;
+    }
+    return costs;
+  }
+
   void AddFloorplanWallConstraints() {
     if (options_.floorplan_wall_priors.empty() || options_.floorplan_loss.weight == 0.0) return;
     for (const auto& prior : options_.floorplan_wall_priors) {
@@ -433,7 +454,7 @@ class GlobalPositioner {
       auto* cost = new ceres::AutoDiffCostFunction<FloorplanWallError, 2, 3>(
           new FloorplanWallError{options_.floorplan_projection, options_.floorplan_offset,
                                  prior.start, prior.end, options_.floorplan_sigma});
-      problem_->AddResidualBlock(cost, floorplan_losses_.back().get(), point->second.data());
+      RecordResidual("wall", problem_->AddResidualBlock(cost, floorplan_losses_.back().get(), point->second.data()));
       ++result_.diagnostics.num_floorplan_wall_residuals;
     }
     if (result_.diagnostics.num_floorplan_wall_residuals && options_.optimize_positions) {
@@ -675,6 +696,7 @@ class GlobalPositioner {
     }
     const ceres::ResidualBlockId residual_block_id = problem_->AddResidualBlock(
         cost, geometry_loss, center.data(), point_xyz.data(), &scale);
+    RecordResidual("bearing", residual_block_id);
     if (is_loop_closure && options_.playback.IsEnabled()) {
       if (!loop_closure_anchor.has_value()) {
         throw std::invalid_argument(
@@ -929,11 +951,11 @@ class GlobalPositioner {
       depth_loss = loss_normal_depth_.get();
     }
 
-    problem_->AddResidualBlock(cost,
+    RecordResidual("depth", problem_->AddResidualBlock(cost,
                                depth_loss,
                                CenterForImage(image).data(),
                                point_xyz_.at(point3D_id).data(),
-                               &scale_it->second);
+                               &scale_it->second));
     if (!options_.use_log_scale_for_depth_map_scales) {
       problem_->SetParameterLowerBound(&scale_it->second, 0, 1e-5);
     }
@@ -957,8 +979,8 @@ class GlobalPositioner {
           std::make_unique<ceres::ScaledLoss>(loss_scale_prior_.get(),
                                               observation_count,
                                               ceres::DO_NOT_TAKE_OWNERSHIP));
-      problem_->AddResidualBlock(
-          cost, per_image_scale_prior_losses_.back().get(), &scale);
+      RecordResidual("scale", problem_->AddResidualBlock(
+          cost, per_image_scale_prior_losses_.back().get(), &scale));
       ++result_.diagnostics.num_scale_prior_residuals;
     }
   }
@@ -1230,6 +1252,7 @@ class GlobalPositioner {
       per_image_scale_prior_losses_;
   std::vector<std::unique_ptr<ceres::LossFunction>>
       temporal_acceleration_losses_;
+  std::map<std::string, std::vector<ceres::ResidualBlockId>> residual_blocks_;
   std::vector<std::shared_ptr<ceres::LossFunction>> floorplan_losses_;
   bool has_sequential_support_candidate_ = false;
   GlobalPositioningResult result_;

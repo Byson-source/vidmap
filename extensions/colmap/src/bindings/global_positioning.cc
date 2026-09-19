@@ -219,6 +219,8 @@ void BindGlobalPositioning(py::module_& m) {
 
   py::class_<GlobalPositioningResult>(m, "GlobalPositioningResult")
       .def_readonly("success", &GlobalPositioningResult::success)
+      .def_readonly("initial_residual_costs", &GlobalPositioningResult::initial_residual_costs)
+      .def_readonly("final_residual_costs", &GlobalPositioningResult::final_residual_costs)
       .def_readonly("depth_map_scales",
                     &GlobalPositioningResult::depth_map_scales)
       .def_readonly("initial_frame_centers",
