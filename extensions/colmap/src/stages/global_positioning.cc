@@ -20,6 +20,7 @@
 #include <utility>
 
 #include "metric_depth.h"
+#include "floorplan_wall.h"
 #include "solver_playback.h"
 #include "vidmap_native/conversion.h"
 #include "weighted_motion_averaging.h"
@@ -134,6 +135,7 @@ class GlobalPositioner {
     SetupProblem();
     InitializeRandomPositions();
     AddPointToCameraConstraints();
+    AddFloorplanWallConstraints();
     if (options_.use_parameter_block_ordering) {
       AddCamerasAndPointsToParameterGroups();
     }
@@ -414,6 +416,40 @@ class GlobalPositioner {
     }
     AddTemporalAccelerationConstraints();
     AddDepthMapScalePriors();
+  }
+
+  void AddFloorplanWallConstraints() {
+    if (options_.floorplan_wall_priors.empty() || options_.floorplan_loss.weight == 0.0) return;
+    for (const auto& prior : options_.floorplan_wall_priors) {
+      const auto point = point_xyz_.find(prior.point3D_id);
+      if (point == point_xyz_.end()) {
+        throw std::invalid_argument("floorplan prior references an unknown track");
+      }
+      // Never introduce a point which has no active visual observations.
+      if (!problem_->HasParameterBlock(point->second.data())) continue;
+      LossConfig loss = options_.floorplan_loss;
+      loss.weight *= prior.weight;
+      floorplan_losses_.push_back(SharedLoss(loss));
+      auto* cost = new ceres::AutoDiffCostFunction<FloorplanWallError, 2, 3>(
+          new FloorplanWallError{options_.floorplan_projection, options_.floorplan_offset,
+                                 prior.start, prior.end, options_.floorplan_sigma});
+      problem_->AddResidualBlock(cost, floorplan_losses_.back().get(), point->second.data());
+      ++result_.diagnostics.num_floorplan_wall_residuals;
+    }
+    if (result_.diagnostics.num_floorplan_wall_residuals && options_.optimize_positions) {
+      // Choose deterministically; only the height translation gauge is removed.
+      for (ImageId id : mapping_problem_->ImageIds()) {
+        const auto& image = mapping_problem_->Image(id);
+        if ((options_.center_mode == GlobalPositioningCenterMode::kFrame &&
+             frame_centers_.count(image.frame_id) == 0) ||
+            (options_.center_mode == GlobalPositioningCenterMode::kImage &&
+             image_centers_.count(id) == 0)) continue;
+        double* center = CenterForImage(image).data();
+        if (!problem_->HasParameterBlock(center)) continue;
+        problem_->SetManifold(center, new FloorplanHeightManifold(options_.floorplan_projection));
+        break;
+      }
+    }
   }
 
   void AddTemporalAccelerationConstraints() {
@@ -1194,6 +1230,7 @@ class GlobalPositioner {
       per_image_scale_prior_losses_;
   std::vector<std::unique_ptr<ceres::LossFunction>>
       temporal_acceleration_losses_;
+  std::vector<std::shared_ptr<ceres::LossFunction>> floorplan_losses_;
   bool has_sequential_support_candidate_ = false;
   GlobalPositioningResult result_;
 };
@@ -1255,6 +1292,24 @@ void GlobalPositionerOptions::Validate() const {
         !std::isfinite(prior.sqrt_observation_count) ||
         prior.sqrt_observation_count <= 0.0) {
       throw std::invalid_argument("invalid temporal acceleration prior");
+    }
+  }
+  if (!floorplan_wall_priors.empty()) {
+    floorplan_loss.Validate();
+    const Eigen::Matrix2d gram = floorplan_projection * floorplan_projection.transpose();
+    if (!floorplan_projection.allFinite() || !floorplan_offset.allFinite() ||
+        !std::isfinite(floorplan_sigma) || floorplan_sigma <= 0 ||
+        floorplan_loss.type != LossFunctionType::kHuber || gram(0, 0) <= 1e-12 ||
+        !gram.isApprox(Eigen::Matrix2d::Identity() * gram(0, 0), 1e-8)) {
+      throw std::invalid_argument("floorplan requires a finite similarity projection, positive sigma and Huber loss");
+    }
+    std::unordered_set<Point3DId> ids;
+    for (const auto& prior : floorplan_wall_priors) {
+      if (!ids.insert(prior.point3D_id).second || !prior.start.allFinite() ||
+          !prior.end.allFinite() || (prior.end - prior.start).squaredNorm() <= 1e-12 ||
+          !std::isfinite(prior.weight) || prior.weight <= 0) {
+        throw std::invalid_argument("invalid or duplicate floorplan wall prior");
+      }
     }
   }
   loss.Validate();

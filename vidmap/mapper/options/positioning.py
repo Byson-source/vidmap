@@ -156,7 +156,33 @@ class GPTemporalAccelerationOptions:
 
 
 @pydantic_dataclass(frozen=True, kw_only=True, config=ConfigDict(extra="forbid", strict=True))
+class GPFloorplanOptions:
+    enabled: bool = False
+    zfloc_root: Optional[str] = None
+    candidates_dir: Optional[str] = None
+    python_executable: Optional[str] = None
+    sigma_m: Annotated[float, Field(gt=0, allow_inf_nan=False)] = 0.5
+    huber_m: Annotated[float, Field(gt=0, allow_inf_nan=False)] = 1.0
+    first_pass_weight: Annotated[float, Field(ge=0, allow_inf_nan=False)] = 1.0
+    second_pass_weight: Annotated[float, Field(ge=0, allow_inf_nan=False)] = 1.0
+    association_m: Annotated[float, Field(gt=0, allow_inf_nan=False)] = 1.0
+    trans_thresh_m: Annotated[float, Field(gt=0, allow_inf_nan=False)] = 3.0
+    max_interpolation_gap_s: Annotated[float, Field(gt=0, allow_inf_nan=False)] = 2.0
+
+    @property
+    def active(self):
+        return self.enabled and (self.first_pass_weight > 0 or self.second_pass_weight > 0)
+
+    @model_validator(mode="after")
+    def validate_inputs(self):
+        if self.active and any(not v or not v.strip() for v in (self.zfloc_root, self.candidates_dir)):
+            raise ValueError("active GP floorplan requires zfloc_root and candidates_dir")
+        return self
+
+
+@pydantic_dataclass(frozen=True, kw_only=True, config=ConfigDict(extra="forbid", strict=True))
 class GPOptions:
+    floorplan: GPFloorplanOptions = dc_field(default_factory=GPFloorplanOptions)
     common: GPCommonOptions = dc_field(default_factory=GPCommonOptions)
     solver_backend: SolverBackendOptions = dc_field(default_factory=SolverBackendOptions)
     first_pass: GPFirstPassOptions = dc_field(default_factory=GPFirstPassOptions)
@@ -170,6 +196,7 @@ class GPOptions:
         return instantiate_nested_options(
             raw,
             {
+                "floorplan": GPFloorplanOptions,
                 "common": GPCommonOptions,
                 "solver_backend": SolverBackendOptions,
                 "first_pass": GPFirstPassOptions,

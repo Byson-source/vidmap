@@ -28,6 +28,13 @@ enum class GlobalPositioningCenterMode {
   kImage,
 };
 
+struct FloorplanWallPrior {
+  Point3DId point3D_id = 0;
+  Eigen::Vector2d start = Eigen::Vector2d::Zero();
+  Eigen::Vector2d end = Eigen::Vector2d::UnitX();
+  double weight = 1.0;
+};
+
 struct TemporalAccelerationPrior {
   ImageId prev_image_id = 0;
   ImageId image_id = 0;
@@ -76,6 +83,14 @@ struct GlobalPositionerOptions {
   std::map<ImageId, double> initial_dmap_scales;
   std::map<FrameId, Eigen::Vector3d> initial_frame_centers;
 
+  // Empty priors are an exact no-op, including gauge handling.
+  std::vector<FloorplanWallPrior> floorplan_wall_priors;
+  Eigen::Matrix<double, 2, 3> floorplan_projection =
+      (Eigen::Matrix<double, 2, 3>() << 1, 0, 0, 0, 0, 1).finished();
+  Eigen::Vector2d floorplan_offset = Eigen::Vector2d::Zero();
+  double floorplan_sigma = 0.5;
+  LossConfig floorplan_loss = {LossFunctionType::kHuber, 2.0, 1.0};
+
   bool use_temporal_acceleration_prior = false;
   std::vector<TemporalAccelerationPrior> temporal_acceleration_priors;
   double temporal_acceleration_prior_stddev = 1.0;
@@ -107,6 +122,7 @@ struct GlobalPositionerOptions {
 };
 
 struct GlobalPositioningDiagnostics {
+  int num_floorplan_wall_residuals = 0;
   int num_bata_residuals = 0;
   int num_metric_depth_residuals = 0;
   int num_scale_prior_residuals = 0;

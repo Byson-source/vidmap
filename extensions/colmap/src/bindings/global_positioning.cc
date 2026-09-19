@@ -53,6 +53,13 @@ void BindGlobalPositioning(py::module_& m) {
       .value("FRAME", GlobalPositioningCenterMode::kFrame)
       .value("IMAGE", GlobalPositioningCenterMode::kImage);
 
+  py::class_<FloorplanWallPrior>(m, "FloorplanWallPrior")
+      .def(py::init<>())
+      .def_readwrite("point3D_id", &FloorplanWallPrior::point3D_id)
+      .def_readwrite("start", &FloorplanWallPrior::start)
+      .def_readwrite("end", &FloorplanWallPrior::end)
+      .def_readwrite("weight", &FloorplanWallPrior::weight);
+
   py::class_<TemporalAccelerationPrior>(m, "TemporalAccelerationPrior")
       .def(py::init<>())
       .def_readwrite("prev_image_id", &TemporalAccelerationPrior::prev_image_id)
@@ -65,6 +72,11 @@ void BindGlobalPositioning(py::module_& m) {
 
   py::class_<GlobalPositionerOptions>(m, "GlobalPositioningOptions")
       .def(py::init<>())
+      .def_readwrite("floorplan_wall_priors", &GlobalPositionerOptions::floorplan_wall_priors)
+      .def_readwrite("floorplan_projection", &GlobalPositionerOptions::floorplan_projection)
+      .def_readwrite("floorplan_offset", &GlobalPositionerOptions::floorplan_offset)
+      .def_readwrite("floorplan_sigma", &GlobalPositionerOptions::floorplan_sigma)
+      .def_readwrite("floorplan_loss", &GlobalPositionerOptions::floorplan_loss)
       .def_readwrite("generate_random_positions",
                      &GlobalPositionerOptions::generate_random_positions)
       .def_readwrite("generate_random_points",
@@ -168,6 +180,7 @@ void BindGlobalPositioning(py::module_& m) {
       .def("validate", &GlobalPositionerOptions::Validate);
 
   py::class_<GlobalPositioningDiagnostics>(m, "GlobalPositioningDiagnostics")
+      .def_readonly("num_floorplan_wall_residuals", &GlobalPositioningDiagnostics::num_floorplan_wall_residuals)
       .def_readonly("num_bata_residuals",
                     &GlobalPositioningDiagnostics::num_bata_residuals)
       .def_readonly("num_metric_depth_residuals",

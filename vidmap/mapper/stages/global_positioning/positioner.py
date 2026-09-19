@@ -265,6 +265,8 @@ class GlobalPositioner:
             "debug_initial_bata_scales": dict(result.initial_bata_scales),
             "debug_final_bata_scales": dict(result.final_bata_scales),
             "debug_diagnostics": {
+                **({"num_floorplan_wall_residuals": diagnostics.num_floorplan_wall_residuals}
+                   if getattr(diagnostics, "num_floorplan_wall_residuals", 0) else {}),
                 "num_bata_residuals": diagnostics.num_bata_residuals,
                 "num_metric_depth_residuals": diagnostics.num_metric_depth_residuals,
                 "num_scale_prior_residuals": diagnostics.num_scale_prior_residuals,
@@ -370,6 +372,9 @@ class GlobalPositioner:
                 "output_summary.json",
                 gp_output_summary("gp1", self.solve_state, replay_result),
             )
+        if self.options.floorplan.active:
+            from .floorplan import save_floorplan_result
+            save_floorplan_result(self, "gp1", result)
         self.save_pass_result("gp1", result)
         self.require_success(result, "First")
         return result
@@ -399,6 +404,9 @@ class GlobalPositioner:
             stage="gp2",
             prior_specs=temporal_prior_specs,
         )
+        if self.options.floorplan.active:
+            from .floorplan import prepare_floorplan
+            prepare_floorplan(self, native_options, "gp2")
         input_summary = None
         if self.replay.write_enabled("gp2"):
             input_summary = gp_input_summary(
@@ -421,6 +429,9 @@ class GlobalPositioner:
                 "output_summary.json",
                 gp_output_summary("gp2", self.solve_state, replay_result),
             )
+        if self.options.floorplan.active:
+            from .floorplan import save_floorplan_result
+            save_floorplan_result(self, "gp2", result)
         self.save_pass_result("gp2", result)
         self.require_success(result, "Second")
         return result
@@ -570,6 +581,11 @@ class GlobalPositioner:
             prior_specs=temporal_prior_specs,
         )
         try:
+            if self.options.floorplan.active and self.options.floorplan.first_pass_weight > 0:
+                from .floorplan import warmup_floorplan
+                warmup_floorplan(self, native_options)
+                if replay_images is not None:
+                    replay_images = self.snapshot_images()
             result = self.first_pass(native_options, replay_images)
             if self.after_first_pass is not None:
                 self.after_first_pass()

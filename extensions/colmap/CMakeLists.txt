@@ -144,3 +144,10 @@ if(BUILD_TESTING)
 endif()
 
 install(TARGETS vidmap_native_core LIBRARY DESTINATION vidmap_native)
+
+if(BUILD_TESTING)
+  add_executable(vidmap_floorplan_wall_test tests/cpp/floorplan_wall_test.cc)
+  target_link_libraries(vidmap_floorplan_wall_test PRIVATE vidmap_native_algorithms)
+  target_include_directories(vidmap_floorplan_wall_test PRIVATE src)
+  add_test(NAME vidmap_floorplan_wall_test COMMAND vidmap_floorplan_wall_test)
+endif()

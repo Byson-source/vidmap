@@ -178,6 +178,59 @@ gravity residuals and the fitted similarity. Failure stops before GP2.
 Checks: `python -m unittest discover -s tests -p 'test_floorplan*.py'` and, in
 the ZfLOC environment, `python vidmap/utils/test_consensus_gp1.py`.
 
+## Robust floorplan wall constraints in GP
+
+Rebuild the native extension, then enable `mapper.gp.floorplan` to optimize
+shared track points against finite floorplan wall segments:
+
+```bash
+python -m vidmap.map --mapper-inputs "$BASELINE/mapper_inputs" --output "$OUTPUT_DIR" \
+  --mapping-conf uncalib/base \
+  mapping.persist_intermediate_reconstructions=true \
+  mapping.mapper.gp.floorplan.enabled=true \
+  mapping.mapper.gp.floorplan.zfloc_root=/home/ayumi/okvis_ws/src/zfloc \
+  mapping.mapper.gp.floorplan.candidates_dir="$RUN/zfloc20_fliplr_20260919" \
+  mapping.mapper.gp.floorplan.python_executable=/home/ayumi/oss/miniconda3/envs/mapanything/bin/python
+```
+
+This uses the current LaMAR fliplr cache contract, including the original metric
+DA3 predictions and filtered wall masks referenced by metadata. Floorplan CSV
+`gt_lines_original.csv` is the building geometry reference, not trajectory GT.
+Camera centers and tracks remain in VidMap world coordinates; fixed gravity and
+Sim(2) transforms map points into metric floorplan XY only inside the wall cost.
+Rotations stay fixed by RA. The residual is point-to-finite-segment displacement,
+normalized by `sigma_m=0.5`, with Huber width `huber_m=1.0` meters. Existing Ceres
+loss weighting is reused; `first_pass_weight` and `second_pass_weight` default to
+1.0. Each track contributes once, supported by two distinct masked images;
+conflicting wall assignments are rejected and window density is normalized.
+
+GP1 first runs its existing sequential support warm-up and one normal iteration.
+It then continues from those points, centers and depth scales with the remaining
+GP1 iteration budget (at least two required). Native BATA scales are recomputed
+from the warm start, as in stock GP2. The earliest usable single DA3 window's
+local consensus supplies GP1 assignments; GP centers do not reselect them.
+After GP1, whole-trajectory consensus replaces assignments for GP2. Inner solves
+keep their alignment and assignments fixed. Missing/unobservable support is
+logged as abstention, not successful fusion. No wall factors enter RA or BA.
+Disabled, or both pass weights zero, preserves the original call path.
+
+`floorplan_wall/{gp1,gp2}/` contains `factors.json` (provenance, correspondence,
+weights and transforms), `result.json` (actual native count, initial/final wall
+distances and Huber derivatives), and `trajectory_floorplan.{npz,png}`. These
+camera debug plots compare input/output using the **same solver transform for
+that pass**, with no GT alignment. GP1's input is the visual-only warm-up.
+`rec-gp_warmup` is also saved when intermediate reconstruction persistence is on.
+The existing export-only `floorplan_gp1` hook may remain enabled; its output is
+reused only when candidate inputs and thresholds agree.
+
+Run the native CTest wall test, native Python `test_floorplan_wall.py`, and
+`python -m unittest discover -s tests -p 'test_floorplan*.py'`. The ZfLOC checkout
+provides `vidmap/utils/test_wall_factors.py` and
+`shells/vidmap/run_floorplan_comparison.sh disabled|enabled|corrupted`.
+The last condition explicitly shifts 10% of built wall factors by 20 m after
+selection; its wrapper is evaluation-only. Robust loss limits isolated outliers,
+but a consistently wrong floorplan can still move the entire solution.
+
 ## Visualization
 
 ### Browser viewer
