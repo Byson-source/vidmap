@@ -41,12 +41,29 @@ def export_state(reconstruction, path, candidate_names):
              point_xyz=np.asarray([reconstruction.points3D[i].xyz for i in ids]))
 
 
+def prepare_initial_position_prior(positioner, native_options):
+    sigma = positioner.options.floorplan.initial_position_sigma_m
+    if sigma is None:
+        return
+    reference = getattr(positioner, '_floorplan_initial_position', None)
+    if reference is None:
+        rec = positioner.reconstruction
+        image_id = min(rec.reg_image_ids(), key=lambda i: rec.images[i].name)
+        reference = (image_id, np.asarray(rec.images[image_id].projection_center()).copy())
+        positioner._floorplan_initial_position = reference
+    native_options.floorplan_anchor_image_id = reference[0]
+    native_options.floorplan_anchor_reference = reference[1]
+    native_options.floorplan_anchor_sigma = sigma
+
+
 def prepare_floorplan(positioner, native_options, stage):
     options = positioner.options.floorplan
     native_options.floorplan_wall_priors = []  # replace, never append GP1's factors
+    native_options.floorplan_anchor_sigma = 0.0
     weight = options.first_pass_weight if stage == 'gp1' else options.second_pass_weight
     if not options.active or weight == 0:
         return
+    prepare_initial_position_prior(positioner, native_options)
     candidates = Path(options.candidates_dir).expanduser()
     script = Path(options.zfloc_root).expanduser() / 'vidmap/utils/wall_factors.py'
     if not script.is_file():
@@ -90,6 +107,14 @@ def prepare_floorplan(positioner, native_options, stage):
     loss.type = native.LossFunctionType.HUBER
     loss.scale, loss.weight = options.huber_m / options.sigma_m, weight
     native_options.floorplan_loss = loss
+    if options.initial_position_sigma_m is not None:
+        report['initial_position_prior'] = {
+            'image_id': int(native_options.floorplan_anchor_image_id),
+            'reference_world': np.asarray(native_options.floorplan_anchor_reference).tolist(),
+            'sigma_m': options.initial_position_sigma_m,
+            'loss': 'Gaussian horizontal; independent of wall weight',
+        }
+        (out / 'factors.json').write_text(json.dumps(report, indent=2) + '\n')
     logger.info('Floorplan %s: %d unique wall tracks, Huber=%g m, sigma=%g m',
                 stage, len(priors), options.huber_m, options.sigma_m)
 

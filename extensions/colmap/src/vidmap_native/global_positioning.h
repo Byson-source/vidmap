@@ -89,6 +89,10 @@ struct GlobalPositionerOptions {
       (Eigen::Matrix<double, 2, 3>() << 1, 0, 0, 0, 0, 1).finished();
   Eigen::Vector2d floorplan_offset = Eigen::Vector2d::Zero();
   double floorplan_sigma = 0.5;
+  // Zero disables the Gaussian anchor; positive sigma is in floorplan metres.
+  double floorplan_anchor_sigma = 0.0;
+  ImageId floorplan_anchor_image_id = 0;
+  Eigen::Vector3d floorplan_anchor_reference = Eigen::Vector3d::Zero();
   LossConfig floorplan_loss = {LossFunctionType::kHuber, 2.0, 1.0};
 
   bool use_temporal_acceleration_prior = false;

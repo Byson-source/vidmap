@@ -25,6 +25,21 @@ struct FloorplanWallError {
   }
 };
 
+// Gaussian horizontal displacement from a fixed visual initialization.
+struct FloorplanPositionError {
+  Eigen::Matrix<double, 2, 3> projection;
+  Eigen::Vector3d reference;
+  double sigma;
+
+  template <typename T>
+  bool operator()(const T* center, T* residual) const {
+    Eigen::Map<Eigen::Matrix<T, 2, 1>> out(residual);
+    out = projection.cast<T>() *
+          (Eigen::Map<const Eigen::Matrix<T, 3, 1>>(center) - reference.cast<T>()) / T(sigma);
+    return true;
+  }
+};
+
 // Fix only the arbitrary height datum of one camera, allowing both horizontal
 // coordinates to move. The two rows of the projection are orthogonal/equal norm.
 class FloorplanHeightManifold final : public ceres::Manifold {

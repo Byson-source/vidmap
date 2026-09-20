@@ -162,6 +162,8 @@ class GPFloorplanOptions:
     candidates_dir: Optional[str] = None
     python_executable: Optional[str] = None
     sigma_m: Annotated[float, Field(gt=0, allow_inf_nan=False)] = 0.5
+    # Gaussian horizontal anchor to the first active wall-pass input; None disables.
+    initial_position_sigma_m: Annotated[Optional[float], Field(gt=0, allow_inf_nan=False)] = None
     huber_m: Annotated[float, Field(gt=0, allow_inf_nan=False)] = 1.0
     first_pass_weight: Annotated[float, Field(ge=0, allow_inf_nan=False)] = 1.0
     second_pass_weight: Annotated[float, Field(ge=0, allow_inf_nan=False)] = 1.0

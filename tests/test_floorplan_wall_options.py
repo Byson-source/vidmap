@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from vidmap.configuration.build import build_mapping_config
 from vidmap.mapper.options.positioning import GPOptions, GPFloorplanOptions
-from vidmap.mapper.stages.global_positioning.floorplan import warmup_floorplan, prepare_floorplan
+from vidmap.mapper.stages.global_positioning.floorplan import warmup_floorplan, prepare_floorplan, prepare_initial_position_prior
 
 
 class WallOptionsTest(unittest.TestCase):
@@ -24,6 +24,26 @@ class WallOptionsTest(unittest.TestCase):
         options=SimpleNamespace(floorplan_wall_priors=['old'])
         prepare_floorplan(gp,options,'gp2')
         self.assertEqual(options.floorplan_wall_priors,[])
+
+    def test_initial_position_reference_retained_across_passes(self):
+        import numpy as np
+        camera=MagicMock(name='first_camera')
+        camera.name='0000.000000.jpg'
+        camera.projection_center.return_value=np.array([1.,2.,3.])
+        rec=SimpleNamespace(reg_image_ids=lambda:[7],images={7:camera})
+        gp=SimpleNamespace(options=GPOptions(floorplan=GPFloorplanOptions(initial_position_sigma_m=.5)),reconstruction=rec)
+        options=SimpleNamespace()
+        prepare_initial_position_prior(gp,options)
+        camera.projection_center.return_value=np.array([4.,5.,6.])
+        prepare_initial_position_prior(gp,options)
+        self.assertEqual(options.floorplan_anchor_image_id,7)
+        np.testing.assert_array_equal(options.floorplan_anchor_reference,[1.,2.,3.])
+        self.assertEqual(options.floorplan_anchor_sigma,.5)
+        for sigma in (0.,-1.,float('inf'),float('nan')):
+            with self.assertRaises(ValueError):GPFloorplanOptions(initial_position_sigma_m=sigma)
+        config=build_mapping_config(None,source_name='uncalib/base',override_tokens=[
+            'mapper.gp.floorplan.initial_position_sigma_m=0.5'])
+        self.assertEqual(config.pipeline.mapper.gp.floorplan.initial_position_sigma_m,.5)
 
     def test_warmup_keeps_gp1_loss_budget_and_pose(self):
         gp=MagicMock()

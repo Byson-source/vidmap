@@ -22,6 +22,11 @@ int main() {
   double point[]={1,123,0},r[2]; f(point,r);Check(r[0]==0 && r[1]==0);
   FloorplanHeightManifold m(p);double delta[]={.2,.3},out[3];m.Plus(point,delta,out);
   Check(out[1]==point[1] && std::abs(out[0]-1.2)<1e-12 && std::abs(out[2]-.3)<1e-12);
+  FloorplanPositionError anchor{p, {0,999,0}, .5};
+  ceres::AutoDiffCostFunction<FloorplanPositionError,2,3> anchor_cost(new FloorplanPositionError(anchor));
+  double ar[2], aj[6]; const double* ap[]={point}; double* ajs[]={aj};
+  Check(anchor_cost.Evaluate(ap,ar,ajs));
+  Check(ar[0]==2 && ar[1]==0 && aj[0]==2 && aj[5]==2 && aj[1]==0 && aj[4]==0);
   ceres::HuberLoss huber(2.);double rho[3];huber.Evaluate(400,rho);Check(std::abs(rho[1]-.1)<1e-12);
   std::cout << "wall segment, endpoints, Jacobian, height nullspace and Huber PASS\n";
 }

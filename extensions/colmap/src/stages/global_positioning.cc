@@ -458,6 +458,28 @@ class GlobalPositioner {
       ++result_.diagnostics.num_floorplan_wall_residuals;
     }
     if (result_.diagnostics.num_floorplan_wall_residuals && options_.optimize_positions) {
+      if (options_.floorplan_anchor_sigma > 0.0) {
+        const ImageId id = options_.floorplan_anchor_image_id;
+        if (image_ids_.count(id) == 0) {
+          throw std::invalid_argument("floorplan anchor references an unknown image");
+        }
+        const auto& image = mapping_problem_->Image(id);
+        if ((options_.center_mode == GlobalPositioningCenterMode::kFrame &&
+             frame_centers_.count(image.frame_id) == 0) ||
+            (options_.center_mode == GlobalPositioningCenterMode::kImage &&
+             image_centers_.count(id) == 0)) {
+          throw std::invalid_argument("floorplan anchor image has no active center");
+        }
+        double* center = CenterForImage(image).data();
+        if (!problem_->HasParameterBlock(center)) {
+          throw std::invalid_argument("floorplan anchor image has no visual constraints");
+        }
+        auto* cost = new ceres::AutoDiffCostFunction<FloorplanPositionError, 2, 3>(
+            new FloorplanPositionError{options_.floorplan_projection,
+                                      options_.floorplan_anchor_reference,
+                                      options_.floorplan_anchor_sigma});
+        RecordResidual("initial_position", problem_->AddResidualBlock(cost, nullptr, center));
+      }
       // Choose deterministically; only the height translation gauge is removed.
       for (ImageId id : mapping_problem_->ImageIds()) {
         const auto& image = mapping_problem_->Image(id);
@@ -1316,6 +1338,10 @@ void GlobalPositionerOptions::Validate() const {
         prior.sqrt_observation_count <= 0.0) {
       throw std::invalid_argument("invalid temporal acceleration prior");
     }
+  }
+  if (!std::isfinite(floorplan_anchor_sigma) || floorplan_anchor_sigma < 0.0 ||
+      (floorplan_anchor_sigma > 0.0 && !floorplan_anchor_reference.allFinite())) {
+    throw std::invalid_argument("floorplan anchor requires finite nonnegative sigma and reference");
   }
   if (!floorplan_wall_priors.empty()) {
     floorplan_loss.Validate();

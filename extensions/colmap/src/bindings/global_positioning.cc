@@ -76,6 +76,9 @@ void BindGlobalPositioning(py::module_& m) {
       .def_readwrite("floorplan_projection", &GlobalPositionerOptions::floorplan_projection)
       .def_readwrite("floorplan_offset", &GlobalPositionerOptions::floorplan_offset)
       .def_readwrite("floorplan_sigma", &GlobalPositionerOptions::floorplan_sigma)
+      .def_readwrite("floorplan_anchor_sigma", &GlobalPositionerOptions::floorplan_anchor_sigma)
+      .def_readwrite("floorplan_anchor_image_id", &GlobalPositionerOptions::floorplan_anchor_image_id)
+      .def_readwrite("floorplan_anchor_reference", &GlobalPositionerOptions::floorplan_anchor_reference)
       .def_readwrite("floorplan_loss", &GlobalPositionerOptions::floorplan_loss)
       .def_readwrite("generate_random_positions",
                      &GlobalPositionerOptions::generate_random_positions)
